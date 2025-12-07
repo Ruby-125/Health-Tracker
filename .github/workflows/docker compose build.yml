@@ -1,4 +1,4 @@
-name: Docker & Kubernetes CI/CD
+name: Docker CI/CD
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 env:
   DOCKER_REGISTRY: docker.io
   IMAGE_NAME: health-tracker
-  K8S_NAMESPACE: production
 
 jobs:
   # Job 1: Build and Test
@@ -38,7 +37,7 @@ jobs:
         run: |
           echo "🧪 Running tests..."
           # Add your test commands here:
-          # docker-compose run backend npm test
+          # docker compose run backend npm test
           echo "✅ Tests passed"
 
   # Job 2: Push to Docker Hub
@@ -79,61 +78,8 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-frontend:latest
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}
 
-  # Job 3: Deploy to Kubernetes
-  deploy-to-k8s:
-    name: Deploy to Kubernetes
-    needs: push-to-dockerhub
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
-        with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-
-      - name: Deploy Backend to K8s
+      - name: Success Notification
         run: |
-          kubectl set image deployment/${{ env.IMAGE_NAME }}-backend \
-            ${{ env.IMAGE_NAME }}-backend=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-backend:${{ github.sha }} \
-            -n ${{ env.K8S_NAMESPACE }}
-          
-          kubectl rollout status deployment/${{ env.IMAGE_NAME }}-backend -n ${{ env.K8S_NAMESPACE }}
-
-      - name: Deploy Frontend to K8s
-        run: |
-          kubectl set image deployment/${{ env.IMAGE_NAME }}-frontend \
-            ${{ env.IMAGE_NAME }}-frontend=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }} \
-            -n ${{ env.K8S_NAMESPACE }}
-          
-          kubectl rollout status deployment/${{ env.IMAGE_NAME }}-frontend -n ${{ env.K8S_NAMESPACE }}
-
-      - name: Verify Deployment
-        run: |
-          echo "✅ Deployment Status:"
-          kubectl get pods -n ${{ env.K8S_NAMESPACE }}
-          kubectl get services -n ${{ env.K8S_NAMESPACE }}
-
-  # Job 4: Rollback on Failure
-  rollback:
-    name: Rollback on Failure
-    needs: deploy-to-k8s
-    runs-on: ubuntu-latest
-    if: failure()
-    
-    steps:
-      - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
-        with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-
-      - name: Rollback Deployment
-        run: |
-          kubectl rollout undo deployment/${{ env.IMAGE_NAME }}-backend -n ${{ env.K8S_NAMESPACE }}
-          kubectl rollout undo deployment/${{ env.IMAGE_NAME }}-frontend -n ${{ env.K8S_NAMESPACE }}
-          echo "⚠️ Deployment rolled back due to failure"
+          echo "🎉 Docker images pushed successfully!"
+          echo "Backend: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-backend:latest"
+          echo "Frontend: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}-frontend:latest"
